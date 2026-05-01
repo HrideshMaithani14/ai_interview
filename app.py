@@ -35,6 +35,18 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 import io
+import time
+
+def generate_with_retry(model, prompt, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return model.generate_content(prompt)
+        except Exception as e:
+            error_str = str(e).lower()
+            if attempt < max_retries - 1 and ("429" in error_str or "quota" in error_str):
+                time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s...
+                continue
+            raise e
 
 def extract_text_from_file(file):
     filename = file.filename.lower()
@@ -248,7 +260,7 @@ def generate_roadmap():
 Generate a comprehensive, step-by-step learning roadmap for a {current_user.skill_level} in {current_user.domain}.
 Include specific technologies, concepts to master, and project ideas.
 Format the output strictly in cleanly formatted Markdown."""
-        response = model.generate_content(prompt)
+        response = generate_with_retry(model, prompt)
         
         from models import Roadmap
         new_roadmap = Roadmap(user_id=current_user.id, content=response.text)
@@ -320,7 +332,7 @@ Generate exactly 6 interview questions. The questions should be:
 
 Return ONLY a JSON array of 6 strings. No markdown blocks, no formatting. Example: ["Question 1", "Question 2", "Question 3", "Question 4", "Question 5", "Question 6"]"""
         
-        response = model.generate_content(prompt)
+        response = generate_with_retry(model, prompt)
         text_response = response.text.strip()
         if text_response.startswith('```json'): text_response = text_response[7:]
         if text_response.startswith('```'): text_response = text_response[3:]
@@ -358,7 +370,7 @@ Evaluate their performance on a scale of 0 to 100 based on technical accuracy, c
 Return ONLY a JSON object exactly like this:
 {{"score": 85, "feedback": "Your concise evaluation notes here."}}"""
 
-        response = model.generate_content(prompt)
+        response = generate_with_retry(model, prompt)
         text_response = response.text.strip()
         if text_response.startswith('```json'): text_response = text_response[7:]
         if text_response.startswith('```'): text_response = text_response[3:]
@@ -389,7 +401,7 @@ def round5(interview_id):
         prompt = f"""You are an expert Software Architect. Generate a realistic System Design interview question for a candidate applying for {current_user.domain} at {current_user.skill_level} level.
 The question should ask them to design a scalable system (e.g., Design Netflix, Design a URL Shortener) and mention the core requirements.
 Return ONLY the problem statement text."""
-        response = model.generate_content(prompt)
+        response = generate_with_retry(model, prompt)
         question = response.text.strip()
     except Exception as e:
         print("Round 5 generation error:", e)
@@ -409,7 +421,7 @@ The candidate submitted the following architecture description/diagram code:
 Evaluate this design on a scale of 0 to 100 based on Scalability, Fault Tolerance, and appropriateness for a {current_user.skill_level} {current_user.domain} engineer.
 Return ONLY a JSON object exactly like this:
 {{"score": 85, "feedback": "Your evaluation notes here."}}"""
-        response = model.generate_content(prompt)
+        response = generate_with_retry(model, prompt)
         text_response = response.text.strip()
         if text_response.startswith('```json'): text_response = text_response[7:]
         if text_response.startswith('```'): text_response = text_response[3:]
@@ -450,7 +462,7 @@ Requirements:
 - The output should be JUST the problem statement and requirements, no pleasantries.
 - The challenge MUST specifically target the overlap between the candidate's CV and the Target Job Requirements."""
         
-        response = model.generate_content(prompt)
+        response = generate_with_retry(model, prompt)
         question = response.text.strip()
     except Exception as e:
         print("Round 1 generation error:", e)
@@ -506,7 +518,7 @@ The questions MUST:
 2. Be completely unique (do not repeat any questions or concepts).
 3. Include a mix of technical depth and relevant aptitude.
 Return the output strictly as a JSON array of 50 objects, with each object having 'id' (int), 'text' (string), 'options' (array of 4 strings), and 'answer' (the exact string of the correct option). Do not use markdown blocks or formatting."""
-        response = model.generate_content(prompt)
+        response = generate_with_retry(model, prompt)
         text_response = response.text.strip()
         if text_response.startswith('```json'): text_response = text_response[7:]
         if text_response.startswith('```'): text_response = text_response[3:]
@@ -580,7 +592,7 @@ Interview flow:
 Respond directly to the candidate's message below, evaluate their answer briefly, and immediately ask the next question in the flow.
 Candidate says: '{user_message}'"""
 
-            response = model.generate_content(system_prompt)
+            response = generate_with_retry(model, system_prompt)
             ai_reply = response.text
         except Exception as e:
             error_str = str(e)
