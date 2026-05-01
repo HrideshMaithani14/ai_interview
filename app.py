@@ -583,7 +583,7 @@ Candidate says: '{user_message}'"""
             response = model.generate_content(system_prompt)
             ai_reply = response.text
         except Exception as e:
-            ai_reply = "I am having trouble connecting to my brain right now."
+            ai_reply = f"Vercel Debug Error: {str(e)}"
             print("Gemini Error:", e)
             
         return {'reply': ai_reply.replace('*', '')}
