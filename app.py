@@ -19,10 +19,17 @@ genai.configure(api_key=os.environ.get('GEMINI_API_KEY'))
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'dev-secret-key-123'
-if os.environ.get('VERCEL') == '1':
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/database_v2.db'
+
+# Use external Postgres DB if provided (Vercel fix), otherwise fallback to local SQLite
+db_url = os.environ.get('DATABASE_URL')
+if db_url:
+    # SQLAlchemy 1.4+ requires postgresql:// instead of postgres://
+    if db_url.startswith('postgres://'):
+        db_url = db_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 else:
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database_v2.db'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 socketio = SocketIO(app, cors_allowed_origins="*")
