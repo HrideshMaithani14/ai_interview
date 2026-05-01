@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<div class="dashboard-container" id="report-content">
+    <div class="dashboard-header">
+        <div>
+            <h1>Dashboard</h1>
+            <p style="color: var(--text-muted); margin-top: 0.5rem;">Welcome back to your {{ user.domain }} prep!</p>
+        </div>
+        <button class="btn btn-outline" onclick="downloadReport()">📥 Download PDF Report</button>
+    </div>
+
+    <div style="text-align: center; margin-bottom: 2rem;">
+        <img src="{{ url_for('static', filename='images/ai_dashboard_banner.png') }}" alt="AI Dashboard Banner" style="width: 100%; max-height: 250px; object-fit: cover; border-radius: 12px; border: 1px solid var(--glass-border); margin-bottom: 1.5rem;">
+        <h1 style="font-size: 3rem; background: linear-gradient(135deg, var(--primary), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Welcome back, {{ user.name or user.email }}!</h1>
+        <p style="font-size: 1.2rem; color: #ccc;">Select a module below to begin your personalized interview session.</p>
+    </div>
+
+    <h2 style="margin-bottom: 1rem; font-family: 'Outfit', sans-serif;">Interview Modules</h2>
+    <div class="dashboard-grid" style="margin-bottom: 3rem;">
+        <div class="card glass-panel" style="text-align: center; border-top: 4px solid var(--primary);">
+            <h3 style="font-size: 1.5rem; margin-bottom: 0.5rem;">💻 Coding Test</h3>
+            <p style="min-height: 3rem;">Evaluate your algorithmic skills with domain-specific programming challenges.</p>
+            <form method="POST" action="{{ url_for('start_module', module_type='coding') }}">
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Start Coding Test</button>
+            </form>
+        </div>
+        <div class="card glass-panel" style="text-align: center; border-top: 4px solid var(--accent);">
+            <h3 style="font-size: 1.5rem; margin-bottom: 0.5rem;">🤖 AI Video Interview</h3>
+            <p style="min-height: 3rem;">A live, conversational technical interview with our AI powered by Gemini.</p>
+            <form method="POST" action="{{ url_for('start_module', module_type='ai') }}">
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Start AI Interview</button>
+            </form>
+        </div>
+        <div class="card glass-panel" style="text-align: center; border-top: 4px solid var(--success);">
+            <h3 style="font-size: 1.5rem; margin-bottom: 0.5rem;">📝 Aptitude Quiz</h3>
+            <p style="min-height: 3rem;">Test your logical reasoning and quantitative aptitude skills.</p>
+            <form method="POST" action="{{ url_for('start_module', module_type='quiz') }}">
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Start Aptitude Test</button>
+            </form>
+        </div>
+        <div class="card glass-panel" style="text-align: center; border-top: 4px solid #E91E63;">
+            <h3 style="font-size: 1.5rem; margin-bottom: 0.5rem;">🏗️ System Design</h3>
+            <p style="min-height: 3rem;">Design scalable architectures and receive instant AI feedback.</p>
+            <form method="POST" action="{{ url_for('start_module', module_type='design') }}">
+                <button type="submit" class="btn btn-primary" style="width: 100%; background: linear-gradient(135deg, #E91E63, #C2185B);">Start System Design</button>
+            </form>
+        </div>
+    </div>
+
+    <h2 style="margin-bottom: 1rem; font-family: 'Outfit', sans-serif;">Your Profile & Stats</h2>
+    <div class="dashboard-grid">
+        <!-- Profile Card -->
+        <div class="card glass-panel">
+            <h3>Professional Profile</h3>
+            <div style="margin-bottom: 1.5rem;">
+                <p><strong>Email:</strong> {{ user.email }}</p>
+                <p><strong>Domain:</strong> {{ user.domain }}</p>
+                <p><strong>Level:</strong> {{ user.skill_level }}</p>
+                <p><strong>Joined:</strong> {{ user.created_at.strftime('%Y-%m-%d') }}</p>
+            </div>
+            <a href="{{ url_for('profile') }}" class="btn btn-outline" style="width: 100%; text-align: center; display: block;">Edit Profile</a>
+        </div>
+
+        <!-- Stats Card -->
+        <div class="card glass-panel">
+            <h3>Performance Stats</h3>
+            <div class="stats-row">
+                <div class="stat-box">
+                    <span>{{ total_interviews }}</span>
+                    <label>Tests Taken</label>
+                </div>
+                <div class="stat-box">
+                    <span>{{ avg_score }}%</span>
+                    <label>Avg Score</label>
+                </div>
+                <div class="stat-box" style="border: 1px solid var(--accent); background: rgba(88, 101, 242, 0.1);">
+                    <span style="color: var(--accent);">🔥 {{ streak }}</span>
+                    <label>Day Streak</label>
+                </div>
+                <div class="stat-box">
+                    <span>⏱️ {{ time_spent_hours }}h</span>
+                    <label>Time Spent</label>
+                </div>
+            </div>
+            
+            <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 8px; text-align: center;">
+                <h4 style="margin-bottom: 0.5rem; font-size: 0.9rem; color: #aaa;">Daily Performance Trend</h4>
+                <div class="{{ trend_class }}" style="font-size: 1.2rem; font-weight: bold;">
+                    {{ trend_text }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Radar Chart Card -->
+        <div class="card glass-panel" style="text-align: center;">
+            <h3>Skills Analysis</h3>
+            <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">Your performance mapped across different modules.</p>
+            <div style="position: relative; height: 250px; width: 100%; display: flex; justify-content: center;">
+                <canvas id="skillsRadarChart"></canvas>
+            </div>
+        </div>
+
+        <!-- AI Mentor Card -->
+        <div class="card glass-panel">
+            <h3>AI Mentor</h3>
+            <p>Your personalized roadmaps and practice suggestions will appear here once the AI identifies areas for improvement.</p>
+            <a href="{{ url_for('mentor') }}" class="btn btn-outline" style="width: 100%; text-align: center; display: block;">View Learning Paths</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Initialize Radar Chart
+    const ctx = document.getElementById('skillsRadarChart').getContext('2d');
+    const radarData = {{ radar_data | tojson | safe }};
+    
+    new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: ['Coding', 'Aptitude Quiz', 'AI Video', 'Zanota CV'],
+            datasets: [{
+                label: 'Score %',
+                data: radarData,
+                backgroundColor: 'rgba(88, 101, 242, 0.2)',
+                borderColor: '#5865F2',
+                pointBackgroundColor: '#5865F2',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: '#5865F2',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            scales: {
+                r: {
+                    angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    pointLabels: { color: '#e0e0e0', font: { family: 'Outfit' } },
+                    ticks: { color: '#aaa', backdropColor: 'transparent', stepSize: 20, min: 0, max: 100 }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            },
+            maintainAspectRatio: false
+        }
+    });
+
+    // PDF Download functionality
+    function downloadReport() {
+        const element = document.getElementById('report-content');
+        const opt = {
+            margin:       0.5,
+            filename:     '{{ user.name or user.email }}_Interview_Report.pdf',
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#121212' },
+            jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+        };
+
+        // Temporarily adjust styles for better PDF rendering
+        element.style.background = '#1a1a2e';
+        
+        html2pdf().set(opt).from(element).save().then(() => {
+            // Restore styles
+            element.style.background = '';
+        });
+    }
+</script>
+{% endblock %}

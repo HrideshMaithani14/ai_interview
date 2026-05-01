@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block content %}
+<script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+    window.mermaid = mermaid;
+</script>
+
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>Round 5: System Design Whiteboard</h1>
+    </div>
+
+    <div class="card glass-panel" style="margin-bottom: 2rem;">
+        <h3>Problem Statement</h3>
+        <p style="font-size: 1.1rem; color: #e0e0e0;">{{ question }}</p>
+    </div>
+
+    <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+        <!-- Editor Column -->
+        <div class="card glass-panel" style="flex: 1; min-width: 400px;">
+            <h3>Design Description / Mermaid Code</h3>
+            <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 1rem;">Describe your architecture or use Mermaid.js syntax to draw it.</p>
+            <textarea id="design-editor" class="input-field" style="width: 100%; height: 300px; font-family: monospace;" placeholder="graph TD;\n    Client-->LoadBalancer;\n    LoadBalancer-->WebAPI;\n    WebAPI-->Database;"></textarea>
+            
+            <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+                <button id="render-btn" class="btn btn-outline">Preview Diagram</button>
+                <button id="submit-btn" class="btn btn-primary">Submit Design</button>
+            </div>
+            
+            <div id="eval-loader" class="loader" style="display: none; margin-top: 1rem;"></div>
+            <div id="result-panel" style="display: none; margin-top: 1.5rem; padding: 1rem; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                <h4 id="score-display"></h4>
+                <p id="feedback-display" style="margin-top: 0.5rem; color: #ccc;"></p>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline" style="margin-top: 1rem;">Return to Dashboard</a>
+            </div>
+        </div>
+
+        <!-- Preview Column -->
+        <div class="card glass-panel" style="flex: 1; min-width: 400px;">
+            <h3>Diagram Preview</h3>
+            <div id="mermaid-output" style="background: rgba(0,0,0,0.5); padding: 1rem; border-radius: 8px; min-height: 300px; display: flex; justify-content: center; align-items: center; overflow: auto;">
+                <span style="color: #666;">Rendered diagram will appear here</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .loader {
+        border: 4px solid rgba(255,255,255,0.1);
+        border-top: 4px solid #5865F2;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+
+<script>
+    document.getElementById('render-btn').addEventListener('click', async () => {
+        const code = document.getElementById('design-editor').value;
+        const output = document.getElementById('mermaid-output');
+        try {
+            // Check if code looks like mermaid
+            if (code.includes('graph') || code.includes('sequenceDiagram') || code.includes('architecture')) {
+                const { svg } = await window.mermaid.render('preview-svg', code);
+                output.innerHTML = svg;
+            } else {
+                output.innerHTML = '<span style="color: #aaa;">Text description provided. Diagram generation requires Mermaid.js syntax.</span>';
+            }
+        } catch (e) {
+            output.innerHTML = `<span style="color: var(--error);">Syntax Error: ${e.message}</span>`;
+        }
+    });
+
+    document.getElementById('submit-btn').addEventListener('click', () => {
+        const design = document.getElementById('design-editor').value;
+        if (!design.trim()) {
+            alert('Please enter a design description or diagram code.');
+            return;
+        }
+
+        document.getElementById('submit-btn').disabled = true;
+        document.getElementById('eval-loader').style.display = 'block';
+
+        fetch("{{ url_for('submit_round5', interview_id=interview_id) }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ design: design })
+        })
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('eval-loader').style.display = 'none';
+            document.getElementById('result-panel').style.display = 'block';
+            
+            const scoreDisplay = document.getElementById('score-display');
+            scoreDisplay.innerText = `Score: ${data.score}/100 - ${data.status}`;
+            scoreDisplay.style.color = data.status === 'Passed' ? 'var(--success)' : 'var(--error)';
+            
+            document.getElementById('feedback-display').innerText = data.feedback;
+        })
+        .catch(err => {
+            document.getElementById('eval-loader').style.display = 'none';
+            alert("Error submitting design: " + err);
+            document.getElementById('submit-btn').disabled = false;
+        });
+    });
+</script>
+{% endblock %}

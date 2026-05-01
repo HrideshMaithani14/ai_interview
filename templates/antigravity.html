@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+
+{% block title %}Zanota Interview{% endblock %}
+
+{% block content %}
+<style>
+    /* Glassmorphism and premium aesthetics */
+    .zanota-container {
+        max-width: 800px;
+        margin: 40px auto;
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 30px;
+        color: #fff;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    }
+    .phase {
+        display: none;
+        animation: fadeIn 0.5s ease;
+    }
+    .phase.active {
+        display: block;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .chat-bubble {
+        background: rgba(88, 101, 242, 0.2);
+        border: 1px solid rgba(88, 101, 242, 0.5);
+        padding: 15px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        font-size: 1.1rem;
+    }
+    .input-group {
+        margin-bottom: 20px;
+    }
+    .input-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: #ccc;
+    }
+    .input-field {
+        width: 100%;
+        padding: 12px 15px;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        color: white;
+        font-size: 1rem;
+        transition: border-color 0.3s;
+    }
+    .input-field:focus {
+        outline: none;
+        border-color: #5865F2;
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, #5865F2, #4752C4);
+        border: none;
+        padding: 12px 24px;
+        color: white;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(88, 101, 242, 0.4);
+    }
+    .btn-primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+    .file-drop-area {
+        border: 2px dashed rgba(255, 255, 255, 0.3);
+        border-radius: 12px;
+        padding: 40px;
+        text-align: center;
+        margin-bottom: 20px;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+    .file-drop-area:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    .loader {
+        border: 4px solid rgba(255,255,255,0.1);
+        border-top: 4px solid #5865F2;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 20px auto;
+        display: none;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    #question-text {
+        font-size: 1.3rem;
+        font-weight: bold;
+        margin-bottom: 20px;
+        color: #e0e0e0;
+    }
+    .badge {
+        background: rgba(88, 101, 242, 0.3);
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        margin-bottom: 15px;
+        display: inline-block;
+    }
+</style>
+
+<div class="container">
+    <div class="zanota-container">
+        
+        <!-- Phase 1: Intro -->
+        <div id="phase-intro" class="phase active">
+            <h2 class="mb-4">Zanota AI Interview</h2>
+            <div class="chat-bubble">
+                "Hello! I am your Zanota AI recruiter. Before we begin, I'd like to get to know you a bit better. Could you tell me your name and some of your hobbies?"
+            </div>
+            <div class="input-group">
+                <label for="user-name">Your Name</label>
+                <input type="text" id="user-name" class="input-field" placeholder="e.g., Jane Doe" required>
+            </div>
+            <div class="input-group">
+                <label for="user-hobbies">Your Hobbies</label>
+                <input type="text" id="user-hobbies" class="input-field" placeholder="e.g., Reading sci-fi, hiking, painting" required>
+            </div>
+            <button class="btn-primary" onclick="nextPhase('intro', 'upload')">Continue</button>
+        </div>
+
+        <!-- Phase 2: CV Upload -->
+        <div id="phase-upload" class="phase">
+            <h2 class="mb-4">Upload Your CV</h2>
+            <div class="chat-bubble">
+                "Great to meet you! Please upload your latest CV or resume (PDF or DOCX). I'll analyze it to tailor our interview specifically to your background and projects."
+            </div>
+            <div class="file-drop-area" id="drop-area" onclick="document.getElementById('cv-file').click()">
+                <p>Drag & Drop your CV here or click to browse</p>
+                <p style="font-size: 0.8rem; color: #888; margin-top: 10px;">Supports .pdf and .docx</p>
+                <input type="file" id="cv-file" accept=".pdf,.docx" style="display: none;" onchange="updateFileName()">
+            </div>
+            <p id="file-name-display" style="text-align: center; color: #5865F2; font-weight: bold; margin-bottom: 20px;"></p>
+            <button class="btn-primary" id="btn-upload" onclick="submitCV()">Analyze & Generate Questions</button>
+            <div class="loader" id="upload-loader"></div>
+            <p id="upload-status" style="text-align: center; margin-top: 10px; color: #ccc; display: none;">Our AI is analyzing your profile...</p>
+        </div>
+
+        <!-- Phase 3: Interview Loop -->
+        <div id="phase-interview" class="phase">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Interview in Progress</h2>
+                <span class="badge" id="question-counter">Question 1 / 6</span>
+            </div>
+            <div class="chat-bubble" id="question-text">
+                Loading question...
+            </div>
+            <div class="input-group">
+                <label for="user-answer" style="display: flex; justify-content: space-between; align-items: center;">
+                    Your Answer
+                    <button id="btn-dictate" class="btn btn-outline" style="padding: 5px 10px; font-size: 0.9rem;" onclick="toggleDictation()">🎤 Start Dictation</button>
+                </label>
+                <textarea id="user-answer" class="input-field" rows="6" placeholder="Type your answer here..."></textarea>
+            </div>
+            <button class="btn-primary" id="btn-next-question" onclick="submitAnswer()">Submit Answer & Next</button>
+        </div>
+
+        <!-- Phase 4: Finish -->
+        <div id="phase-finish" class="phase">
+            <h2 class="mb-4 text-center">Interview Completed!</h2>
+            <div class="loader" id="eval-loader" style="display: block;"></div>
+            <div id="eval-results" style="display: none; text-align: center;">
+                <div class="chat-bubble mb-4">
+                    "Thank you for your time! I have evaluated your responses."
+                </div>
+                <h3 id="final-score" style="font-size: 3rem; color: #5865F2; margin-bottom: 20px;">--/100</h3>
+                <div class="alert alert-info" id="final-feedback">
+                    Evaluating...
+                </div>
+                <a href="{{ url_for('dashboard') }}" class="btn-primary mt-4" style="display: inline-block; text-decoration: none;">Return to Dashboard</a>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    let state = {
+        name: '',
+        hobbies: '',
+        questions: [],
+        currentQuestionIndex: 0,
+        qaPairs: []
+    };
+
+    // Voice setup
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    let isDictating = false;
+    let synth = window.speechSynthesis;
+
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = function(event) {
+            let finalTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript + " ";
+                }
+            }
+            if (finalTranscript) {
+                document.getElementById('user-answer').value += finalTranscript;
+            }
+        };
+
+        recognition.onend = function() {
+            if (isDictating) {
+                try { recognition.start(); } catch(e){}
+            }
+        };
+    }
+
+    function toggleDictation() {
+        if (!recognition) {
+            alert("Speech recognition not supported in this browser.");
+            return;
+        }
+        const btn = document.getElementById('btn-dictate');
+        if (isDictating) {
+            isDictating = false;
+            recognition.stop();
+            btn.innerHTML = '🎤 Start Dictation';
+            btn.style.borderColor = '';
+            btn.style.color = '';
+        } else {
+            isDictating = true;
+            try { recognition.start(); } catch(e){}
+            btn.innerHTML = '🛑 Stop Dictation';
+            btn.style.borderColor = 'var(--error)';
+            btn.style.color = 'var(--error)';
+        }
+    }
+
+    function speakText(text) {
+        if (!synth) return;
+        synth.cancel(); // Stop current speech
+        const utterance = new SpeechSynthesisUtterance(text);
+        const voices = synth.getVoices();
+        const engVoice = voices.find(v => v.lang.includes('en-US') && (v.name.includes('Google') || v.name.includes('Samantha')));
+        if (engVoice) utterance.voice = engVoice;
+        synth.speak(utterance);
+    }
+
+    function nextPhase(current, next) {
+        if (current === 'intro') {
+            state.name = document.getElementById('user-name').value;
+            state.hobbies = document.getElementById('user-hobbies').value;
+            if (!state.name || !state.hobbies) {
+                alert("Please enter your name and hobbies.");
+                return;
+            }
+        }
+        document.getElementById(`phase-${current}`).classList.remove('active');
+        document.getElementById(`phase-${next}`).classList.add('active');
+    }
+
+    function updateFileName() {
+        const file = document.getElementById('cv-file').files[0];
+        if (file) {
+            document.getElementById('file-name-display').innerText = file.name;
+        }
+    }
+
+    async function submitCV() {
+        const file = document.getElementById('cv-file').files[0];
+        if (!file) {
+            alert("Please upload a CV.");
+            return;
+        }
+
+        document.getElementById('btn-upload').disabled = true;
+        document.getElementById('upload-loader').style.display = 'block';
+        document.getElementById('upload-status').style.display = 'block';
+
+        const formData = new FormData();
+        formData.append('cv', file);
+        formData.append('name', state.name);
+        formData.append('hobbies', state.hobbies);
+
+        try {
+            const response = await fetch(`/api/interview/{{ interview_id }}/round/4/generate`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            
+            if (data.error) {
+                alert("Error: " + data.error);
+                resetUploadState();
+            } else {
+                state.questions = data.questions;
+                startInterview();
+            }
+        } catch (e) {
+            alert("Failed to connect to the server.");
+            resetUploadState();
+        }
+    }
+
+    function resetUploadState() {
+        document.getElementById('btn-upload').disabled = false;
+        document.getElementById('upload-loader').style.display = 'none';
+        document.getElementById('upload-status').style.display = 'none';
+    }
+
+    function startInterview() {
+        nextPhase('upload', 'interview');
+        showCurrentQuestion();
+    }
+
+    function showCurrentQuestion() {
+        const qText = state.questions[state.currentQuestionIndex];
+        document.getElementById('question-text').innerText = `"${qText}"`;
+        document.getElementById('question-counter').innerText = `Question ${state.currentQuestionIndex + 1} / ${state.questions.length}`;
+        document.getElementById('user-answer').value = '';
+        document.getElementById('user-answer').focus();
+        
+        if (state.currentQuestionIndex === state.questions.length - 1) {
+            document.getElementById('btn-next-question').innerText = "Submit Final Answer";
+        }
+        
+        speakText(qText);
+    }
+
+    function submitAnswer() {
+        const answer = document.getElementById('user-answer').value.trim();
+        if (!answer) {
+            alert("Please provide an answer.");
+            return;
+        }
+
+        const question = state.questions[state.currentQuestionIndex];
+        state.qaPairs.push({ question: question, answer: answer });
+
+        if (state.currentQuestionIndex < state.questions.length - 1) {
+            state.currentQuestionIndex++;
+            showCurrentQuestion();
+        } else {
+            finishInterview();
+        }
+    }
+
+    async function finishInterview() {
+        nextPhase('interview', 'finish');
+        
+        try {
+            const response = await fetch(`/api/interview/{{ interview_id }}/round/4/submit`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ qaPairs: state.qaPairs })
+            });
+            const data = await response.json();
+            
+            document.getElementById('eval-loader').style.display = 'none';
+            document.getElementById('eval-results').style.display = 'block';
+            
+            if (data.error) {
+                document.getElementById('final-score').innerText = "Error";
+                document.getElementById('final-feedback').innerText = data.error;
+            } else {
+                document.getElementById('final-score').innerText = `${data.score}/100`;
+                document.getElementById('final-feedback').innerText = data.feedback;
+                
+                if (data.status === 'Passed') {
+                    document.getElementById('final-score').style.color = '#4CAF50';
+                } else {
+                    document.getElementById('final-score').style.color = '#F44336';
+                }
+            }
+        } catch (e) {
+            document.getElementById('eval-loader').style.display = 'none';
+            document.getElementById('eval-results').style.display = 'block';
+            document.getElementById('final-score').innerText = "Error";
+            document.getElementById('final-feedback').innerText = "Failed to evaluate results.";
+        }
+    }
+</script>
+{% endblock %}

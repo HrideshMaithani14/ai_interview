@@ -1,0 +1,303 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>Round 3: Live AI Video Interview</h1>
+    </div>
+
+    <div class="card glass-panel" style="text-align: center; padding: 4rem 2rem;">
+        <h2 style="margin-bottom: 1rem;">Welcome to the AI Interview</h2>
+        <p style="color: var(--text-muted); margin-bottom: 2rem;">
+            This module uses continuous voice recognition and eye/face tracking. Speak naturally—the AI will listen and respond when you pause. Ensure your face remains visible.
+        </p>
+        <button id="start-camera" class="btn btn-primary" style="font-size: 1.1rem; padding: 1rem 2rem;">Start AI Interview</button>
+        
+        <div id="video-container" style="display: none; margin-top: 2rem; border-radius: 12px; overflow: hidden; border: 2px solid var(--glass-border); padding-bottom: 1rem;">
+            <video id="user-video" autoplay muted playsinline style="width: 100%; max-width: 600px; transform: scaleX(-1); border-radius: 8px;"></video>
+            
+            <div id="warning-banner" style="display: none; background: var(--error); color: white; padding: 0.5rem; font-weight: bold; margin-top: 1rem;">
+                WARNING: Please look at the screen!
+            </div>
+
+            <div id="ai-status" style="margin-top: 1.5rem; font-weight: 600; font-size: 1.1rem; color: var(--accent); padding: 0 1rem;">AI is setting up...</div>
+            <div id="transcript" style="margin-top: 1rem; font-style: italic; color: var(--text-muted); min-height: 2rem; padding: 0 1rem;"></div>
+            
+            <div style="margin-top: 1rem; padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                <div style="text-align: left;">
+                    <span style="color: #aaa; font-size: 0.8rem; text-transform: uppercase;">Emotion Analysis</span><br>
+                    <span id="emotion-status" style="font-weight: bold; color: var(--primary);">Loading models...</span>
+                </div>
+                <button id="end-interview" class="btn btn-outline" style="border-color: var(--error); color: var(--error);">End Interview</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="result-panel" class="card glass-panel" style="display: none; text-align: center; margin-top: 2rem;">
+        <h2>Interview Complete</h2>
+        <h3 id="score-display" style="font-size: 2rem; color: var(--accent); margin: 1rem 0;"></h3>
+        <p>Your behavioral and technical responses have been evaluated.</p>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary" style="margin-top: 1rem;">Return to Dashboard</a>
+    </div>
+</div>
+
+<!-- MediaPipe Face Detection for Anti-Cheat -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<!-- Face-API.js for Emotion/Sentiment Analysis -->
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
+
+<script>
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    let synth = window.speechSynthesis;
+    let isAiSpeaking = false;
+
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US'; 
+    }
+
+    const videoElement = document.getElementById('user-video');
+    const warningBanner = document.getElementById('warning-banner');
+    const aiStatus = document.getElementById('ai-status');
+    const transcriptDiv = document.getElementById('transcript');
+    
+    let warnings = 0;
+    let warningTimeout = null;
+
+    // Initialize Face Detection
+    const faceDetection = new FaceDetection({locateFile: (file) => {
+      return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`;
+    }});
+    faceDetection.setOptions({
+      model: 'short',
+      minDetectionConfidence: 0.5
+    });
+    
+    faceDetection.onResults((results) => {
+        if (warnings >= 3) return;
+        
+        // Anti-cheat logic: Check if face is missing or turned away
+        if (!results.detections || results.detections.length === 0) {
+            triggerWarning("Eyes/Face not detected on screen!");
+        } else if (results.detections.length > 1) {
+            triggerWarning("Multiple faces detected in frame!");
+        }
+    });
+
+    function triggerWarning(msg) {
+        if (warningTimeout) return; // Debounce warnings
+        warnings++;
+        warningBanner.style.display = 'block';
+        warningBanner.textContent = `WARNING ${warnings}/3: ${msg}`;
+        
+        if (warnings >= 3) {
+            alert("Interview Failed: Cheating violations exceeded threshold.");
+            window.location.href = "{{ url_for('dashboard') }}";
+        }
+        
+        warningTimeout = setTimeout(() => { 
+            warningTimeout = null; 
+            warningBanner.style.display = 'none';
+        }, 4000);
+    }
+
+    const socket = io();
+    const hiddenCanvas = document.createElement('canvas');
+    hiddenCanvas.width = 320; // Lower resolution for streaming performance
+    hiddenCanvas.height = 240;
+    const ctx = hiddenCanvas.getContext('2d');
+    
+    // Throttle frame sending to ~10fps to save bandwidth
+    let lastFrameTime = 0;
+
+    let emotionStats = { happy: 0, neutral: 0, positive: 0, negative: 0, total: 0 };
+    const emotionStatusElem = document.getElementById('emotion-status');
+
+    document.getElementById('start-camera').addEventListener('click', async () => {
+        try {
+            document.getElementById('start-camera').style.display = 'none';
+            document.getElementById('video-container').style.display = 'block';
+            
+            // Load Face-API models
+            await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
+            await faceapi.nets.faceExpressionNet.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
+            emotionStatusElem.innerText = "Active & Monitoring";
+
+            // Start MediaPipe Camera for video & anti-cheat
+            const camera = new Camera(videoElement, {
+              onFrame: async () => {
+                // MediaPipe Anti-cheat
+                await faceDetection.send({image: videoElement});
+                
+                // Live Stream to Admin via SocketIO
+                const now = Date.now();
+                if (now - lastFrameTime > 100) { // ~10fps
+                    ctx.drawImage(videoElement, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
+                    const base64Frame = hiddenCanvas.toDataURL('image/jpeg', 0.5); // 50% quality jpeg
+                    socket.emit('video_frame', {
+                        user_id: '{{ current_user.id }}',
+                        name: '{{ current_user.name or current_user.email }}',
+                        image: base64Frame
+                    });
+                    lastFrameTime = now;
+                }
+              },
+              width: 640,
+              height: 480
+            });
+            camera.start();
+            
+            // Start Face-API Emotion Tracking loop
+            setInterval(async () => {
+                if (videoElement.paused || videoElement.ended) return;
+                const detections = await faceapi.detectSingleFace(videoElement, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
+                if (detections) {
+                    const expressions = detections.expressions;
+                    const dominant = Object.keys(expressions).reduce((a, b) => expressions[a] > expressions[b] ? a : b);
+                    emotionStatusElem.innerText = dominant.charAt(0).toUpperCase() + dominant.slice(1);
+                    
+                    emotionStats.total++;
+                    if (dominant === 'happy' || dominant === 'neutral' || dominant === 'surprised') {
+                        emotionStats.positive++;
+                    } else {
+                        emotionStats.negative++;
+                    }
+                }
+            }, 1000); // Analyze every 1 second
+
+            synth.getVoices();
+            interactWithAI("Hello, I am ready to begin the interview.");
+            
+        } catch (err) {
+            alert('Camera or microphone setup failed. Please allow permissions.');
+            console.error(err);
+        }
+    });
+
+    document.getElementById('end-interview').addEventListener('click', () => {
+        // Calculate Confidence Score (0 to 100)
+        let confidenceScore = 0;
+        if (emotionStats.total > 0) {
+            confidenceScore = Math.round((emotionStats.positive / emotionStats.total) * 100);
+        } else {
+            confidenceScore = 75; // Fallback default
+        }
+        
+        // Stop recordings
+        try { recognition.stop(); } catch(e){}
+        videoElement.srcObject.getTracks().forEach(track => track.stop());
+        
+        document.getElementById('video-container').style.display = 'none';
+        emotionStatusElem.innerText = "Submitting results...";
+        
+        fetch("{{ url_for('submit_round3', interview_id=interview_id) }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ confidence_score: confidenceScore })
+        })
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('result-panel').style.display = 'block';
+            document.getElementById('score-display').innerText = `Confidence Score: ${data.score}%`;
+            document.getElementById('score-display').style.color = data.status === 'Passed' ? 'var(--success)' : 'var(--error)';
+        })
+        .catch(err => {
+            alert('Failed to submit score: ' + err);
+            window.location.href = "{{ url_for('dashboard') }}";
+        });
+    });
+
+    let finalTranscript = '';
+    let typingTimer;
+
+    if (recognition) {
+        recognition.onresult = function(event) {
+            if (isAiSpeaking) return; // Ignore input while AI talks
+
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript + " ";
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+            transcriptDiv.innerHTML = `You: "${finalTranscript} <span style="color:#aaa">${interimTranscript}</span>"`;
+            
+            clearTimeout(typingTimer);
+            if (finalTranscript.trim() !== '') {
+                // If user pauses for 2 seconds, assume they finished answering
+                typingTimer = setTimeout(() => {
+                    const messageToSend = finalTranscript.trim();
+                    finalTranscript = ''; 
+                    transcriptDiv.innerHTML = ''; 
+                    interactWithAI(messageToSend);
+                }, 2000);
+            }
+        };
+        
+        recognition.onend = function() {
+            // Auto-restart listening
+            if (!isAiSpeaking) {
+                try { recognition.start(); } catch(e){}
+            }
+        };
+        
+        recognition.onerror = function(event) {
+            console.error("Speech recognition error", event.error);
+        };
+    } else {
+        alert("Your browser does not support Speech Recognition. Please use Chrome or Edge.");
+    }
+
+    function interactWithAI(message) {
+        aiStatus.textContent = 'AI is thinking...';
+        recognition.stop();
+        isAiSpeaking = true;
+        
+        fetch("{{ url_for('interact_round3', interview_id=interview_id) }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: message })
+        })
+        .then(res => {
+            if (!res.ok) {
+                return res.text().then(text => { throw new Error(text.substring(0, 100)); });
+            }
+            return res.json();
+        })
+        .then(data => {
+            aiStatus.textContent = `Interviewer: "${data.reply}"`;
+            
+            if (synth) {
+                const utterance = new SpeechSynthesisUtterance(data.reply);
+                const voices = synth.getVoices();
+                const engVoice = voices.find(v => v.lang.includes('en-US') && (v.name.includes('Google') || v.name.includes('Samantha')));
+                if (engVoice) utterance.voice = engVoice;
+                
+                utterance.onend = () => {
+                    isAiSpeaking = false;
+                    aiStatus.textContent = 'Listening... (Speak naturally)';
+                    try { recognition.start(); } catch(e){}
+                };
+                
+                synth.speak(utterance);
+            } else {
+                isAiSpeaking = false;
+                try { recognition.start(); } catch(e){}
+            }
+        })
+        .catch(err => {
+            aiStatus.textContent = 'Error communicating with AI.';
+            alert("Backend Error: " + err.message);
+            console.error(err);
+            isAiSpeaking = false;
+            try { recognition.start(); } catch(e){}
+        });
+    }
+</script>
+{% endblock %}

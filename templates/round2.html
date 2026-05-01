@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>Round 2: Aptitude Quiz</h1>
+        <div id="timer" style="font-size: 1.5rem; color: var(--accent); font-weight: bold; font-family: 'Outfit', sans-serif;">50:00</div>
+    </div>
+
+    <div class="card glass-panel" id="quiz-container">
+        {% for q in questions %}
+        <div class="question-block" style="margin-bottom: 2rem;">
+            <h4>{{ loop.index }}. {{ q.text }}</h4>
+            <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                {% for option in q.options %}
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                    <input type="radio" name="q{{ q.id }}" value="{{ option }}" style="accent-color: var(--primary);">
+                    <span>{{ option }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+        <button id="submit-quiz" class="btn btn-primary">Submit Quiz</button>
+    </div>
+    
+    <div class="card glass-panel" id="result-panel" style="display: none; text-align: center;">
+        <h2 id="score-display"></h2>
+        <a href="#" class="btn btn-primary" style="margin-top: 1rem;">Proceed to Round 3 (AI Video)</a>
+    </div>
+</div>
+
+<script>
+    // Timer Logic
+    let timeLeft = 3000;
+    const timerDisplay = document.getElementById('timer');
+    const timerId = setInterval(() => {
+        timeLeft--;
+        const minutes = Math.floor(timeLeft / 60);
+        const seconds = timeLeft % 60;
+        timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        if (timeLeft <= 0) {
+            clearInterval(timerId);
+            submitQuiz();
+        }
+    }, 1000);
+
+    document.getElementById('submit-quiz').addEventListener('click', submitQuiz);
+
+    function submitQuiz() {
+        clearInterval(timerId);
+        const answers = {};
+        {% for q in questions %}
+            const selected{{ q.id }} = document.querySelector('input[name="q{{ q.id }}"]:checked');
+            if (selected{{ q.id }}) {
+                answers['{{ q.id }}'] = selected{{ q.id }}.value;
+            }
+        {% endfor %}
+
+        fetch("{{ url_for('submit_round2', interview_id=interview_id) }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ answers: answers })
+        })
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('quiz-container').style.display = 'none';
+            document.getElementById('result-panel').style.display = 'block';
+            document.getElementById('score-display').innerHTML = `You scored ${data.score}%!<br><span style="color: ${data.status === 'Passed' ? 'var(--success)' : 'var(--error)'}">${data.status}</span>`;
+        });
+    }
+</script>
+{% endblock %}

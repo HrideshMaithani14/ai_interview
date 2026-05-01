@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="form-container glass-panel">
+    <div class="auth-header">
+        <h2>Professional Profile</h2>
+        <p>Configure your technical domain and expertise level.</p>
+    </div>
+    
+    <form method="POST" action="{{ url_for('profile') }}" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="email">Work Email</label>
+            <input type="email" id="email" class="form-control" disabled value="{{ current_user.email }}">
+        </div>
+        <div class="form-group">
+            <label for="name">Full Name</label>
+            <input type="text" id="name" name="name" class="form-control" required placeholder="Jane Doe" value="{{ current_user.name or '' }}">
+        </div>
+
+        <div class="form-group">
+            <label for="hobbies">Hobbies</label>
+            <input type="text" id="hobbies" name="hobbies" class="form-control" required placeholder="Reading, Hiking, Coding" value="{{ current_user.hobbies or '' }}">
+        </div>
+
+        <div class="form-group">
+            <label for="job_requirement">Target Job Requirements (Optional)</label>
+            <textarea id="job_requirement" name="job_requirement" class="form-control" placeholder="Paste the job description you are targeting..." style="height: 100px; resize: vertical;">{{ current_user.job_requirement or '' }}</textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="cv_file">Upload CV / Resume (PDF or DOCX)</label>
+            <input type="file" id="cv_file" name="cv_file" class="form-control" accept=".pdf,.docx" {% if not current_user.is_authenticated or not current_user.cv_text %}required{% endif %}>
+            {% if current_user.is_authenticated and current_user.cv_text %}
+            <small style="color: var(--success); margin-top: 5px; display: block;">✓ CV already on file (upload a new one to replace)</small>
+            {% endif %}
+        </div>
+        
+        <div class="form-group">
+            <label for="domain">Technical Domain</label>
+            <select id="domain" name="domain" class="form-control" required>
+                <option value="" disabled {% if not current_user.is_authenticated %}selected{% endif %}>Select a domain...</option>
+                <option value="Software Engineering" {% if current_user.is_authenticated and current_user.domain == 'Software Engineering' %}selected{% endif %}>Software Engineering</option>
+                <option value="Data Science" {% if current_user.is_authenticated and current_user.domain == 'Data Science' %}selected{% endif %}>Data Science</option>
+                <option value="Machine Learning" {% if current_user.is_authenticated and current_user.domain == 'Machine Learning' %}selected{% endif %}>Machine Learning</option>
+                <option value="Web Development" {% if current_user.is_authenticated and current_user.domain == 'Web Development' %}selected{% endif %}>Web Development</option>
+                <option value="Cloud Computing" {% if current_user.is_authenticated and current_user.domain == 'Cloud Computing' %}selected{% endif %}>Cloud Computing</option>
+                <option value="Cybersecurity" {% if current_user.is_authenticated and current_user.domain == 'Cybersecurity' %}selected{% endif %}>Cybersecurity</option>
+                <option value="DevOps" {% if current_user.is_authenticated and current_user.domain == 'DevOps' %}selected{% endif %}>DevOps / SRE</option>
+                <option value="Mobile Development" {% if current_user.is_authenticated and current_user.domain == 'Mobile Development' %}selected{% endif %}>Mobile Development (iOS/Android)</option>
+                <option value="UI/UX Design" {% if current_user.is_authenticated and current_user.domain == 'UI/UX Design' %}selected{% endif %}>UI/UX Design</option>
+                <option value="Quality Assurance" {% if current_user.is_authenticated and current_user.domain == 'Quality Assurance' %}selected{% endif %}>Quality Assurance (QA)</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="skill_level">Expertise Level</label>
+            <select id="skill_level" name="skill_level" class="form-control" required>
+                <option value="" disabled {% if not current_user.is_authenticated %}selected{% endif %}>Select your level...</option>
+                <option value="Fresher" {% if current_user.is_authenticated and current_user.skill_level == 'Fresher' %}selected{% endif %}>Fresher / Entry Level</option>
+                <option value="Professional" {% if current_user.is_authenticated and current_user.skill_level == 'Professional' %}selected{% endif %}>Professional / Mid-Level</option>
+                <option value="Senior Role" {% if current_user.is_authenticated and current_user.skill_level == 'Senior Role' %}selected{% endif %}>Senior Role / Principal</option>
+            </select>
+        </div>
+        
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">{% if current_user.is_authenticated %}Save Profile{% else %}Proceed to Dashboard{% endif %}</button>
+    </form>
+</div>
+{% endblock %}

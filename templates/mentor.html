@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <div>
+            <h1>AI Career Mentor</h1>
+            <p style="color: var(--text-muted); margin-top: 0.5rem;">Personalized roadmaps for your {{ current_user.domain }} journey.</p>
+        </div>
+        <button id="generate-btn" class="btn btn-primary">Generate New Roadmap</button>
+    </div>
+
+    <div class="card glass-panel" id="roadmap-container">
+        {% if roadmap %}
+            <div id="markdown-content" style="display:none;">{{ roadmap.content }}</div>
+            <div id="rendered-content" style="line-height: 1.6;"></div>
+        {% else %}
+            <div style="text-align: center; padding: 3rem;">
+                <h3 style="margin-bottom: 1rem;">No Roadmap Generated Yet</h3>
+                <p style="color: var(--text-muted);">Click the button above to let Gemini analyze your profile and generate a customized path.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    const markdownContent = document.getElementById('markdown-content');
+    if (markdownContent) {
+        document.getElementById('rendered-content').innerHTML = marked.parse(markdownContent.textContent);
+    }
+
+    document.getElementById('generate-btn').addEventListener('click', function() {
+        const btn = this;
+        btn.textContent = 'Generating... (Please wait)';
+        btn.disabled = true;
+        
+        fetch("{{ url_for('generate_roadmap') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                window.location.reload();
+            } else {
+                alert("Error generating roadmap: " + data.message);
+                btn.textContent = 'Generate New Roadmap';
+                btn.disabled = false;
+            }
+        })
+        .catch(err => {
+            alert("Network error.");
+            btn.textContent = 'Generate New Roadmap';
+            btn.disabled = false;
+        });
+    });
+</script>
+
+<style>
+    /* Basic Markdown Styling */
+    #rendered-content h1, #rendered-content h2, #rendered-content h3 {
+        margin-top: 1.5rem;
+        margin-bottom: 0.5rem;
+        color: var(--primary);
+        font-family: 'Outfit', sans-serif;
+    }
+    #rendered-content p {
+        margin-bottom: 1rem;
+    }
+    #rendered-content ul, #rendered-content ol {
+        margin-left: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    #rendered-content li {
+        margin-bottom: 0.5rem;
+    }
+    #rendered-content code {
+        background: rgba(0,0,0,0.3);
+        padding: 0.2rem 0.4rem;
+        border-radius: 4px;
+        font-family: monospace;
+    }
+    #rendered-content pre {
+        background: rgba(0,0,0,0.3);
+        padding: 1rem;
+        border-radius: 8px;
+        overflow-x: auto;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}

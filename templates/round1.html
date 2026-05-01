@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block content %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <h1>Round 1: Coding Challenge</h1>
+    </div>
+
+    <div class="card glass-panel" style="margin-bottom: 2rem;">
+        <h3>Problem Statement</h3>
+        <p>{{ question }}</p>
+    </div>
+
+    <div class="card glass-panel">
+        <div id="monaco-editor" style="height: 350px; border-radius: 8px; border: 1px solid var(--glass-border); overflow: hidden;"></div>
+        
+        <div style="margin-top: 1.5rem; display: flex; justify-content: space-between;">
+            <button id="run-btn" class="btn btn-primary">Run Tests</button>
+            <a href="{{ url_for('round2', interview_id=interview_id) }}" class="btn btn-outline" id="next-btn" style="display:none;">Next Round →</a>
+        </div>
+
+        <div id="output-panel" style="margin-top: 1rem; padding: 1rem; background: rgba(0,0,0,0.3); border-radius: 8px; font-family: monospace; display: none;"></div>
+    </div>
+</div>
+
+<script>
+    let editor;
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.40.0/min/vs' }});
+    require(['vs/editor/editor.main'], function() {
+        editor = monaco.editor.create(document.getElementById('monaco-editor'), {
+            value: "def reverse_string(s):\n    # Write your code here\n    pass\n",
+            language: 'python',
+            theme: 'vs-dark',
+            automaticLayout: true,
+            fontSize: 16,
+            minimap: { enabled: false }
+        });
+    });
+
+    document.getElementById('run-btn').addEventListener('click', function() {
+        if (!editor) return;
+        const code = editor.getValue();
+        const outputPanel = document.getElementById('output-panel');
+        outputPanel.style.display = 'block';
+        outputPanel.innerHTML = 'Running...';
+        
+        fetch("{{ url_for('submit_round1', interview_id=interview_id) }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: code })
+        })
+        .then(res => res.json())
+        .then(data => {
+            outputPanel.innerHTML = `<span style="color: ${data.status === 'Passed' ? 'var(--success)' : 'var(--error)'}">Status: ${data.status}</span><br><br><pre style="margin-top:1rem;">${data.output}</pre>`;
+            if(data.status === 'Passed') {
+                document.getElementById('next-btn').style.display = 'inline-block';
+            }
+        });
+    });
+</script>
+</style>
+{% endblock %}

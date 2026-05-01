@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+
+{% block title %}Log In - Zanota{% endblock %}
+
+{% block content %}
+<div class="form-container glass-panel" style="max-width: 450px; margin: 80px auto;">
+    <div class="auth-header" style="text-align: center; margin-bottom: 2rem;">
+        <h2 style="font-size: 2rem; background: linear-gradient(135deg, var(--primary), var(--success)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Welcome Back</h2>
+        <p>Log in to continue your interview prep</p>
+    </div>
+    
+    <form method="POST" action="{{ url_for('login') }}">
+        <div class="form-group">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" class="form-control" required placeholder="name@company.com">
+        </div>
+        
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" class="form-control" required>
+        </div>
+        
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem; font-size: 1.1rem; font-weight: bold;">Log In</button>
+    </form>
+    
+    <div style="text-align: center; margin-top: 1.5rem; color: var(--text-muted);">
+        Don't have an account? <a href="{{ url_for('signup') }}" style="color: var(--primary); text-decoration: none;">Sign up</a>
+    </div>
+</div>
+{% endblock %}

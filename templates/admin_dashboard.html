@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<style>
+    .admin-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+    .live-feed-container { background: #111; padding: 20px; border-radius: 12px; border: 1px solid var(--glass-border); min-height: 400px; }
+    .live-feed-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-top: 20px; }
+    .feed-card { background: #222; border-radius: 8px; overflow: hidden; border: 1px solid #444; }
+    .feed-card img { width: 100%; height: auto; display: block; border-bottom: 1px solid #444; }
+    .feed-info { padding: 10px; font-size: 0.9rem; text-align: center; }
+</style>
+
+<div class="dashboard-container" style="max-width: 1400px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Admin Control Panel</h1>
+        <a href="{{ url_for('admin_logout') }}" class="btn btn-outline">Logout</a>
+    </div>
+
+    <div class="admin-grid">
+        <!-- Live Video Feeds -->
+        <div class="live-feed-container">
+            <h3 id="live-feed-title">🔴 Live AI Interviews</h3>
+            <p style="color: #aaa; font-size: 0.9rem;">Select a candidate to view their live camera feed.</p>
+            <div id="video-feeds" class="live-feed-grid">
+                <div style="color: var(--text-muted); text-align: center; grid-column: 1 / -1; padding: 50px;">
+                    Waiting for selection...
+                </div>
+            </div>
+        </div>
+
+        <!-- Users List -->
+        <div>
+            <div class="card glass-panel" style="margin-bottom: 20px;">
+                <h3>Registered Candidates</h3>
+                <ul style="list-style: none; padding: 0; margin-top: 15px;">
+                    {% for u in users %}
+                        {% if not u.is_admin %}
+                        <li style="padding: 10px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
+                            <div style="display: flex; flex-direction: column;">
+                                <strong>{{ u.name or u.email }}</strong>
+                                <span style="color: var(--text-muted); font-size: 0.8rem;">Domain: {{ u.domain }} ({{ u.skill_level }})</span>
+                                <span style="color: var(--success); font-size: 0.8rem;">CV: {% if u.cv_text %}Uploaded{% else %}Missing{% endif %}</span>
+                            </div>
+                            <button onclick="selectUserForLiveFeed({{ u.id }}, '{{ u.name or u.email }}')" class="btn btn-sm" style="background: rgba(255,0,0,0.1); border: 1px solid red; color: red; padding: 5px 10px; font-size: 0.8rem;">🔴 View Live</button>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+            </div>
+            
+            <div class="card glass-panel" style="position: relative;">
+                <img src="{{ url_for('static', filename='images/admin_leaderboard_icon.png') }}" alt="Leaderboard Icon" style="position: absolute; top: 15px; right: 20px; width: 40px; border-radius: 50%;">
+                <h3 style="margin-bottom: 5px;">Weekly Leaderboard</h3>
+                <p style="font-size: 0.8rem; color: #aaa; margin-bottom: 15px;">Top performers from the last 7 days</p>
+                <ul style="list-style: none; padding: 0;">
+                    {% if leaderboard %}
+                        {% for entry in leaderboard %}
+                        <li style="padding: 12px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <span style="font-weight: bold; font-size: 1.1rem; color: {% if loop.index == 1 %}#FFD700{% elif loop.index == 2 %}#C0C0C0{% elif loop.index == 3 %}#CD7F32{% else %}var(--text-light){% endif %};">
+                                    #{{ loop.index }} {{ entry.user.name or entry.user.email }}
+                                </span>
+                                <div style="font-size: 0.85rem; color: #ccc;">Tests Taken: {{ entry.tests_taken }}</div>
+                            </div>
+                            <div style="font-size: 1.2rem; font-weight: bold; color: var(--accent);">
+                                {{ entry.avg_score }}%
+                            </div>
+                        </li>
+                        {% endfor %}
+                    {% else %}
+                        <li style="padding: 10px; color: var(--text-muted); text-align: center;">No activity this week.</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script>
+    const socket = io();
+
+    socket.on('connect', function() {
+        socket.emit('join_admin');
+        console.log("Connected to admin room for live feeds.");
+    });
+
+    let selected_user_id = null;
+
+    function selectUserForLiveFeed(userId, userName) {
+        selected_user_id = userId;
+        document.getElementById('live-feed-title').innerText = '🔴 Live AI Interview: ' + userName;
+        document.getElementById('video-feeds').innerHTML = `
+            <div class="feed-card" style="grid-column: 1 / -1; background: #000;">
+                <img id="active-feed-img" src="" alt="Waiting for feed..." style="width: 100%; height: 400px; object-fit: contain;">
+                <div class="feed-info">
+                    <strong style="color: var(--primary);">${userName}</strong>
+                    <br><span style="color: #0f0; font-size: 0.8rem;">● Live</span>
+                </div>
+            </div>
+        `;
+    }
+
+    socket.on('video_frame_broadcast', function(data) {
+        if (selected_user_id && data.user_id == selected_user_id) {
+            let img = document.getElementById('active-feed-img');
+            if (img) {
+                img.src = data.image;
+            }
+        }
+    });
+</script>
+{% endblock %}
