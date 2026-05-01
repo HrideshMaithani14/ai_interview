@@ -19,7 +19,10 @@ genai.configure(api_key=os.environ.get('GEMINI_API_KEY'))
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'dev-secret-key-123'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database_v2.db'
+if os.environ.get('VERCEL') == '1':
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/database_v2.db'
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database_v2.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 socketio = SocketIO(app, cors_allowed_origins="*")
