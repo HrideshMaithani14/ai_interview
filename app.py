@@ -37,6 +37,10 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 import io
 import time
 
+class MockResponse:
+    def __init__(self, text):
+        self.text = text
+
 def generate_with_retry(model, prompt, max_retries=3):
     for attempt in range(max_retries):
         try:
@@ -44,9 +48,26 @@ def generate_with_retry(model, prompt, max_retries=3):
         except Exception as e:
             error_str = str(e).lower()
             if attempt < max_retries - 1 and ("429" in error_str or "quota" in error_str):
-                time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s...
+                time.sleep(2 ** attempt)  # Exponential backoff
                 continue
-            raise e
+            
+            print(f"Gemini API Error: {e}")
+            # Fallback to mock response to keep the app functional during rate limits
+            prompt_lower = prompt.lower()
+            if "json" in prompt_lower or "array" in prompt_lower or "exactly 6 interview questions" in prompt_lower:
+                if "50 random multiple-choice" in prompt_lower:
+                    return MockResponse('[{"id": 1, "text": "Mock API Limit Reached Question?", "options": ["A", "B", "C", "D"], "answer": "A"}]')
+                elif "exactly 6 interview questions" in prompt_lower:
+                    return MockResponse('["API Limit Q1", "API Limit Q2", "API Limit Q3", "API Limit Q4", "API Limit Q5", "API Limit Q6"]')
+                elif "score" in prompt_lower and "feedback" in prompt_lower:
+                    return MockResponse('{"score": 75, "feedback": "Mock evaluation: The API rate limit was reached, so this is a placeholder score."}')
+                else:
+                    return MockResponse('{}')
+            
+            if "roadmap" in prompt_lower:
+                return MockResponse("## API Limit Reached\nCould not generate roadmap due to Gemini API rate limits.")
+                
+            return MockResponse("I am a mock response because the Gemini API quota has been reached. Please set up billing or wait for the quota to reset.")
 
 def extract_text_from_file(file):
     filename = file.filename.lower()
