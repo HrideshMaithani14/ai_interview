@@ -12,9 +12,14 @@
         </p>
         <button id="start-camera" class="btn btn-primary" style="font-size: 1.1rem; padding: 1rem 2rem;">Start AI Interview</button>
         
-        <div id="video-container" style="display: none; margin-top: 2rem; border-radius: 12px; overflow: hidden; border: 2px solid var(--glass-border); padding-bottom: 1rem;">
+        <div id="video-container" style="display: none; margin-top: 2rem; border-radius: 12px; overflow: hidden; border: 2px solid var(--glass-border); padding-bottom: 1rem; position: relative;">
             <video id="user-video" autoplay muted playsinline style="width: 100%; max-width: 600px; transform: scaleX(-1); border-radius: 8px;"></video>
             
+            <!-- Admin Prank Video Overlay -->
+            <div id="admin-video-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: black; z-index: 50; border-radius: 8px; overflow: hidden;">
+                <video id="admin-video-player" style="width: 100%; height: 100%; object-fit: cover;"></video>
+            </div>
+
             <div id="warning-banner" style="display: none; background: var(--error); color: white; padding: 0.5rem; font-weight: bold; margin-top: 1rem;">
                 WARNING: Please look at the screen!
             </div>
@@ -115,19 +120,6 @@
         if (data.command === 'brightness') {
             document.body.style.filter = 'brightness(' + data.value + '%)';
             document.body.style.transition = 'filter 0.3s ease';
-        } else if (data.command === 'torch') {
-            if (videoElement.srcObject) {
-                const track = videoElement.srcObject.getVideoTracks()[0];
-                if (track) {
-                    try {
-                        track.applyConstraints({
-                            advanced: [{ torch: data.value }]
-                        });
-                    } catch (e) {
-                        console.warn("Torch not supported on this device.", e);
-                    }
-                }
-            }
         } else if (data.command === 'audio') {
             try {
                 const audio = new Audio(data.audio_data);
@@ -135,6 +127,15 @@
             } catch (e) {
                 console.error("Error playing admin audio", e);
             }
+        } else if (data.command === 'play_video') {
+            const overlay = document.getElementById('admin-video-overlay');
+            const player = document.getElementById('admin-video-player');
+            player.src = "{{ url_for('static', filename='videos/rickroll.mp4') }}";
+            overlay.style.display = 'block';
+            player.play();
+            player.onended = () => {
+                overlay.style.display = 'none';
+            };
         }
     });
 
