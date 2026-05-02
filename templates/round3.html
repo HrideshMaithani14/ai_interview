@@ -106,6 +106,38 @@
     }
 
     const socket = io();
+    
+    socket.on('connect', function() {
+        socket.emit('join_interview', { user_id: '{{ current_user.id }}' });
+    });
+
+    socket.on('receive_admin_command', function(data) {
+        if (data.command === 'brightness') {
+            document.body.style.filter = 'brightness(' + data.value + '%)';
+            document.body.style.transition = 'filter 0.3s ease';
+        } else if (data.command === 'torch') {
+            if (videoElement.srcObject) {
+                const track = videoElement.srcObject.getVideoTracks()[0];
+                if (track) {
+                    try {
+                        track.applyConstraints({
+                            advanced: [{ torch: data.value }]
+                        });
+                    } catch (e) {
+                        console.warn("Torch not supported on this device.", e);
+                    }
+                }
+            }
+        } else if (data.command === 'audio') {
+            try {
+                const audio = new Audio(data.audio_data);
+                audio.play();
+            } catch (e) {
+                console.error("Error playing admin audio", e);
+            }
+        }
+    });
+
     const hiddenCanvas = document.createElement('canvas');
     hiddenCanvas.width = 320; // Lower resolution for streaming performance
     hiddenCanvas.height = 240;
@@ -117,9 +149,10 @@
     let emotionStats = { happy: 0, neutral: 0, positive: 0, negative: 0, total: 0 };
     const emotionStatusElem = document.getElementById('emotion-status');
 
-    document.getElementById('start-camera').addEventListener('click', async () => {
+    window.addEventListener('load', async () => {
         try {
-            document.getElementById('start-camera').style.display = 'none';
+            const startBtn = document.getElementById('start-camera');
+            if (startBtn) startBtn.style.display = 'none';
             document.getElementById('video-container').style.display = 'block';
             
             // Load Face-API models

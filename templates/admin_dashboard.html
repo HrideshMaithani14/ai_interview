@@ -88,9 +88,14 @@
     });
 
     let selected_user_id = null;
+    let torchState = false;
+    let mediaRecorder;
+    let audioChunks = [];
+    let pttStream = null;
 
     function selectUserForLiveFeed(userId, userName) {
         selected_user_id = userId;
+        torchState = false;
         document.getElementById('live-feed-title').innerText = '🔴 Live AI Interview: ' + userName;
         document.getElementById('video-feeds').innerHTML = `
             <div class="feed-card" style="grid-column: 1 / -1; background: #000;">
@@ -100,7 +105,89 @@
                     <br><span style="color: #0f0; font-size: 0.8rem;">● Live</span>
                 </div>
             </div>
+            
+            <!-- Admin Controls -->
+            <div id="admin-controls" style="grid-column: 1 / -1; margin-top: 15px; background: #222; padding: 15px; border-radius: 8px; border: 1px solid #444; display: flex; gap: 20px; align-items: center; justify-content: center; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <label for="brightness-slider" style="color: #ccc; font-size: 0.9rem;">Brightness</label>
+                    <input type="range" id="brightness-slider" min="10" max="200" value="100" oninput="updateBrightness(this.value)" style="width: 100px;">
+                </div>
+                <button onclick="toggleTorch()" class="btn btn-outline" style="border-color: #ffc107; color: #ffc107;" id="torch-btn">🔦 Toggle Torch</button>
+                <button id="ptt-btn" class="btn btn-primary" style="background: #e91e63; border-color: #e91e63;">🎤 Hold to Talk</button>
+            </div>
         `;
+        initPushToTalk();
+    }
+
+    function updateBrightness(val) {
+        if (!selected_user_id) return;
+        socket.emit('admin_command', { user_id: selected_user_id, command: 'brightness', value: val });
+    }
+
+    function toggleTorch() {
+        if (!selected_user_id) return;
+        torchState = !torchState;
+        const btn = document.getElementById('torch-btn');
+        if (torchState) {
+            btn.style.background = '#ffc107';
+            btn.style.color = '#000';
+        } else {
+            btn.style.background = 'transparent';
+            btn.style.color = '#ffc107';
+        }
+        socket.emit('admin_command', { user_id: selected_user_id, command: 'torch', value: torchState });
+    }
+
+    async function initPushToTalk() {
+        const pttBtn = document.getElementById('ptt-btn');
+        if (!pttBtn) return;
+        
+        if (!pttStream) {
+            try {
+                pttStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (err) {
+                console.error("Microphone access denied:", err);
+                pttBtn.innerText = "🎤 Mic Denied";
+                pttBtn.disabled = true;
+                return;
+            }
+        }
+        
+        const startRecording = () => {
+            if (!selected_user_id || (mediaRecorder && mediaRecorder.state === 'recording')) return;
+            audioChunks = [];
+            mediaRecorder = new MediaRecorder(pttStream);
+            mediaRecorder.ondataavailable = e => {
+                if (e.data.size > 0) audioChunks.push(e.data);
+            };
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const reader = new FileReader();
+                reader.readAsDataURL(audioBlob);
+                reader.onloadend = () => {
+                    const base64Audio = reader.result;
+                    socket.emit('admin_command', { user_id: selected_user_id, command: 'audio', audio_data: base64Audio });
+                };
+            };
+            mediaRecorder.start();
+            pttBtn.style.background = '#ff0000';
+            pttBtn.innerText = '🎙️ Recording...';
+        };
+        
+        const stopRecording = () => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+            pttBtn.style.background = '#e91e63';
+            pttBtn.innerText = '🎤 Hold to Talk';
+        };
+
+        pttBtn.addEventListener('mousedown', startRecording);
+        pttBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startRecording(); });
+        
+        pttBtn.addEventListener('mouseup', stopRecording);
+        pttBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopRecording(); });
+        pttBtn.addEventListener('mouseleave', stopRecording);
     }
 
     socket.on('video_frame_broadcast', function(data) {

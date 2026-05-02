@@ -697,5 +697,18 @@ def handle_video_frame(data):
 def on_join_admin():
     join_room('admin_room')
 
+@socketio.on('join_interview')
+def on_join_interview(data):
+    user_id = data.get('user_id')
+    if user_id:
+        join_room(f"user_{user_id}")
+
+@socketio.on('admin_command')
+def handle_admin_command(data):
+    user_id = data.get('user_id')
+    if user_id:
+        emit('receive_admin_command', data, to=f"user_{user_id}")
+
 if __name__ == '__main__':
     socketio.run(app, debug=True, port=5000, allow_unsafe_werkzeug=True)
+
